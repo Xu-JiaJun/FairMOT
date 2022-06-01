@@ -298,52 +298,10 @@ class JDETracker(object):
         dists = matching.fuse_motion(self.kalman_filter, dists, strack_pool, detections)
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=0.4)
 
-        # add Occlusion Detection Module ( By Xjj )
-        # get tracks that do not need update feature
-        # occlusion_itracked = []
-        # for index in range(len(matches)):
-        #     for j in range(index + 1, len(matches)):
-        #         first_index = matches[index][0]
-        #         second_index = matches[j][0]
-        #         first_track = strack_pool[first_index]
-        #         second_track = strack_pool[second_index]
-        #         iou_res = cal_iou(first_track.tlbr, second_track.tlbr)
-        #         if iou_res > 0:
-        #             occ_res = check_center_occlusion(first_track.tlbr, second_track.tlbr)
-        #             if occ_res == 1:
-        #                 occlusion_itracked.append(first_index)
-        #             elif occ_res == 2:
-        #                 occlusion_itracked.append(second_index)
-                    # elif occ_res == 3:
-                    #     first_area = cal_area(first_track.tlwh)
-                    #     second_area = cal_area(second_track.tlwh)
-                    #     if first_area > second_area:
-                    #         occlusion_itracked.append(second_index)
-                    #     else:
-                    #         occlusion_itracked.append(first_index)
-                    
-                    # in MOT16
-                    # if occ_res == 1 or occ_res == 2 or occ_res ==3:
-                    #     first_area = cal_area(first_track.tlwh)
-                    #     second_area = cal_area(second_track.tlwh)
-                    #     if first_area > second_area:
-                    #         occlusion_itracked.append(second_index)
-                    #     else:
-                    #         occlusion_itracked.append(first_index)
-                    
-                    # else:
-                    #     continue
-
-        # End
-
         for itracked, idet in matches:
             track = strack_pool[itracked]
             det = detections[idet]
             if track.state == TrackState.Tracked:
-            #     if itracked in occlusion_itracked:
-            #         track.update(detections[idet], self.frame_id, update_feature=False)
-            #     else:
-            #         track.update(detections[idet], self.frame_id)
                 track.update(detections[idet], self.frame_id)
                 activated_starcks.append(track)
             else:
@@ -458,69 +416,3 @@ def remove_duplicate_stracks(stracksa, stracksb):
     resa = [t for i, t in enumerate(stracksa) if not i in dupa]
     resb = [t for i, t in enumerate(stracksb) if not i in dupb]
     return resa, resb
-
-# 计算两个坐标框的IOU
-def cal_iou(box1, box2):
-    """
-    :param box1: = [xmin1, ymin1, xmax1, ymax1]
-    :param box2: = [xmin2, ymin2, xmax2, ymax2]
-    :return: 
-    """
-    xmin1, ymin1, xmax1, ymax1 = box1
-    xmin2, ymin2, xmax2, ymax2 = box2
-    # 计算每个矩形的面积
-    s1 = (xmax1 - xmin1) * (ymax1 - ymin1)  # C的面积
-    s2 = (xmax2 - xmin2) * (ymax2 - ymin2)  # G的面积
- 
-    # 计算相交矩形
-    xmin = max(xmin1, xmin2)
-    ymin = max(ymin1, ymin2)
-    xmax = min(xmax1, xmax2)
-    ymax = min(ymax1, ymax2)
- 
-    w = max(0, xmax - xmin)
-    h = max(0, ymax - ymin)
-    area = w * h  # C∩G的面积
-    iou = area / (s1 + s2 - area)
-    return iou
-
-# 计算坐标框的面积
-def cal_area(box):
-    """
-    :param box1: = [xmin, ymin, width, height]
-    :return: 
-    """
-    xmin, ymin, width, height = box
-    return width * height
-
-# 
-def check_center_occlusion(box1, box2):
-    """
-    :param box1: = [xmin1, ymin1, xmax1, ymax1]
-    :param box2: = [xmin2, ymin2, xmax2, ymax2]
-    :return: 0 means no occlusion, 1 means only center1 in box2, 2 means only center2 in box2, 3 mean both in another box
-    """
-    xmin1, ymin1, xmax1, ymax1 = box1
-    xmin2, ymin2, xmax2, ymax2 = box2
-    # 得到box1的中心点
-    centerx1 = (xmin1 + xmax1) / 2
-    centery1 = (ymin1 + ymax1) / 2
-    # box2 中心点
-    centerx2 = (xmin2 + xmax2) / 2
-    centery2 = (ymin2 + ymax2) / 2
-    # 判断是否在框中
-    flag1 = 0 
-    flag2 = 0
-    if (centerx1 > xmin2 and centerx1 < xmax2) and (centery1 > ymin2 and centery1 < ymax2):
-        flag1 = 1
-    if (centerx2 > xmin1 and centerx2 < xmax1) and (centery2 > ymin1 and centery2 < ymax1):
-        flag2 = 1
-    # 返回
-    if (flag1 == 0 and flag2 == 0):
-        return 0
-    elif (flag1 == 1 and flag2 == 0):
-        return 1
-    elif (flag1 == 0 and flag2 == 1):
-        return 2
-    else:
-        return 3

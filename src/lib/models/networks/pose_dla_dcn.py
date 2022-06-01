@@ -15,19 +15,21 @@ import torch.utils.model_zoo as model_zoo
 
 from dcn_v2 import DCN
 
+from .attention import PSAModule
+
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
 
 
 class ChannelAttention(nn.Module):
-    def __init__(self, in_planes, ratio=16):
+    def __init__(self, in_planes, ratio=4):
         super(ChannelAttention, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
 
-        self.fc1 = nn.Conv2d(in_planes, in_planes // 16, 1, bias=False)
+        self.fc1 = nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False)
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Conv2d(in_planes // 16, in_planes, 1, bias=False)
+        self.fc2 = nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False)
 
         self.sigmoid = nn.Sigmoid()
 
@@ -77,7 +79,14 @@ class BasicBlock(nn.Module):
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3,
                                stride=1, padding=dilation,
                                bias=False, dilation=dilation)
+        # PSA Module
+        # self.conv2 = PSAModule(planes, planes, stride=1)
+
         self.bn2 = nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
+        # CBAM Block
+        # self.ca = ChannelAttention(planes)
+        # self.sa = SpatialAttention()
+
         self.stride = stride
 
     def forward(self, x, residual=None):
@@ -90,6 +99,10 @@ class BasicBlock(nn.Module):
 
         out = self.conv2(out)
         out = self.bn2(out)
+
+        # CBAM Block
+        # out = self.ca(out) * out
+        # out = self.sa(out) * out
 
         out += residual
         out = self.relu(out)
@@ -274,8 +287,8 @@ class DLA(nn.Module):
             channels[0], channels[0], levels[0])
 
         # 第一层加入注意力机制
-        self.ca = ChannelAttention(self.channels[0])
-        self.sa = SpatialAttention()
+        # self.ca = ChannelAttention(self.channels[0])
+        # self.sa = SpatialAttention()
 
         self.level1 = self._make_conv_level(
             channels[0], channels[1], levels[1], stride=2)
@@ -288,6 +301,11 @@ class DLA(nn.Module):
                            level_root=True, root_residual=residual_root)
         self.level5 = Tree(levels[5], block, channels[4], channels[5], 2,
                            level_root=True, root_residual=residual_root)
+
+        # print('channel5: ', self.channels[5])
+        # 最后一层加入CBAM
+        # self.ca = ChannelAttention(self.channels[5])
+        # self.sa = SpatialAttention()
 
         # for m in self.modules():
         #     if isinstance(m, nn.Conv2d):
@@ -331,16 +349,21 @@ class DLA(nn.Module):
         x = self.base_layer(x)
 
         # 提取第一层，在其后加入注意力机制的前向
-        x = getattr(self, 'level{}'.format(0))(x)
-        y.append(x)
-
-        x = self.ca(x) * x
-        x = self.sa(x) * x
+        # x = getattr(self, 'level{}'.format(0))(x)
         # y.append(x)
 
-        for i in range(1, 6):
+        # x = self.ca(x) * x
+        # x = self.sa(x) * x
+
+        for i in range(0, 6):
             x = getattr(self, 'level{}'.format(i))(x)
             y.append(x)
+        
+        # print("x5_size: ", len(x))
+        # 第六层后加入注意力机制
+        # x = self.ca(x) * x
+        # x = self.sa(x) * x
+
         return y
 
     def load_pretrained_model(self, data='imagenet', name='dla34', hash='ba72cf86'):
@@ -488,12 +511,23 @@ class DLASeg(nn.Module):
         scales = [2 ** i for i in range(len(channels[self.first_level:]))]
         self.dla_up = DLAUp(self.first_level, channels[self.first_level:], scales)
 
+        # DLAup后加入CBAM 还没有尝试
+        # self.ca = ChannelAttention(64)
+        # self.sa = SpatialAttention()
+
         if out_channel == 0:
             out_channel = channels[self.first_level]
 
         self.ida_up = IDAUp(out_channel, channels[self.first_level:self.last_level], 
                             [2 ** i for i in range(self.last_level - self.first_level)])
         
+        # 在IDA后加入CBAM 3
+        # self.ca = ChannelAttention(64)
+        # self.sa = SpatialAttention()
+
+        # 在IDA后加入PSA 3
+        # self.psa = PSAModule(64, 64)
+
         self.heads = heads
         for head in self.heads:
             classes = self.heads[head]
@@ -518,28 +552,69 @@ class DLASeg(nn.Module):
               else:
                 fill_fc_weights(fc)
             self.__setattr__(head, fc)
+        
+        # CBAM after heads
+        # self.ca_1 = ChannelAttention(1)   because // ratio operate
+        # self.ca_2 = ChannelAttention(2)
+        self.ca_4 = ChannelAttention(4)
+        self.ca_128 = ChannelAttention(128)
+        self.sa = SpatialAttention()
+
+        # PSA after heads
+        # self.psa_4 = PSAModule(4, 4)
+        # self.psa_128 = PSAModule(128, 128)
 
     def forward(self, x):
         x = self.base(x)
         x = self.dla_up(x)
+
+        # print('x_size: ', len(x))
+        # CBAM 2
+        # x = self.ca(x) * x
+        # x = self.sa(x) * x
 
         y = []
         for i in range(self.last_level - self.first_level):
             y.append(x[i].clone())
         self.ida_up(y, 0, len(y))
 
+        # CBAM 3
+        # for i in range(len(y)):
+        #     y[i] = self.ca(y[i]) * y[i]
+        #     y[i] = self.sa(y[i]) * y[i]
+
+        # PSA 3
+        # for i in range(len(y)):
+        #     y[i] = self.psa(y[i])
+
         z = {}
         for head in self.heads:
             z[head] = self.__getattr__(head)(y[-1])
+
+            # CBAM 4
+            if head == 'wh':
+                z[head] = self.ca_4(z[head]) * z[head]
+                z[head] = self.sa(z[head]) * z[head]
+            elif head == 'id':
+                z[head] = self.ca_128(z[head]) * z[head]
+                z[head] = self.sa(z[head]) * z[head]
+
+            # PSA after heads
+            # if head == 'wh':
+            #     z[head] = self.psa_4(z[head])
+            # if head == 'id':
+            #     z[head] = self.psa_128(z[head])
+            
         return [z]
     
 
 def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4):
-  model = DLASeg('dla{}'.format(num_layers), heads,
-                 pretrained=True,
-                 down_ratio=down_ratio,
-                 final_kernel=1,
-                 last_level=5,
-                 head_conv=head_conv)
-  return model
+    print("using pose_dla_dcn")
+    model = DLASeg('dla{}'.format(num_layers), heads,
+                    pretrained=True,
+                    down_ratio=down_ratio,
+                    final_kernel=1,
+                    last_level=5,
+                    head_conv=head_conv)
+    return model
 

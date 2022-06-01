@@ -7,6 +7,8 @@ from pathlib import Path
 
 from .common import *
 
+from .networks.cbam import ChannelAttention
+from .networks.cbam import SpatialAttention
 
 class Detect(nn.Module):
     stride = None  # strides computed during build
@@ -111,7 +113,8 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
                 pass
 
         n = max(round(n * gd), 1) if n > 1 else n  # depth gain
-        if m in [Conv, Bottleneck, SPP, DWConv, Focus, BottleneckCSP, C3, C3TR, DeConv, DeConvDCN]:
+        # add CBAM
+        if m in [Conv, Bottleneck, SPP, DWConv, Focus, BottleneckCSP, C3, C3TR, DeConv, DeConvDCN, CBAM]:
             c1, c2 = ch[f], args[0]
             c2 = make_divisible(c2 * gw, 8)
 
@@ -158,12 +161,22 @@ class PoseYOLOv5s(nn.Module):
                 fc[-1].bias.data.fill_(-2.19)
             else:
                 fill_fc_weights(fc)
+        
+        self.ca_4 = ChannelAttention(4)
+        self.ca_64 = ChannelAttention(64)
+        self.sa = SpatialAttention()
 
     def forward(self, x):
         x = self.backbone(x)
         ret = {}
         for head in self.heads:
             ret[head] = self.__getattr__(head)(x)
+            if head == 'id':
+                ret[head] = self.ca_64(ret[head]) * ret[head]
+                ret[head] = self.sa(ret[head]) * ret[head]
+            elif head == 'wh':
+                ret[head] = self.ca_4(ret[head]) * ret[head]
+                ret[head] = self.sa(ret[head]) * ret[head]
         return [ret]
 
 
@@ -176,6 +189,8 @@ def get_pose_net(num_layers, heads, head_conv):
         os.path.dirname(__file__),
         '../../../models/yolov5s.pt'
     )
+    # pretrained = '/FairMOT/models/fairmot_lite.pth'
+    # pretrained = '/FairMOT/models/yolo_cbam.pth'
     model = PoseYOLOv5s(heads, config_file)
     initialize_weights(model, pretrained)
     return model
@@ -210,7 +225,9 @@ def initialize_weights(model, pretrained=''):
 
     if os.path.isfile(pretrained):
         ckpt = torch.load(pretrained)  # load checkpoint
-        state_dict = ckpt['model'].float().state_dict()  # to FP32
+        print('ckpt', ckpt.keys())
+        # state_dict = ckpt['model'].float().state_dict()  # to FP32
+        state_dict = ckpt['state_dict']
         state_dict = intersect_dicts(state_dict, model.backbone.state_dict())  # intersect
         model.backbone.load_state_dict(state_dict, strict=False)  # load
         print('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), pretrained))  # report

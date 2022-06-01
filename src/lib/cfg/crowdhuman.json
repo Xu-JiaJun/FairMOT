@@ -1,5 +1,5 @@
 {
-    "root":"/root/autodl-tmp",
+    "root":"/root/autodl-tmp/data",
     "train":
     {
         "crowdhuman_train":"./data/crowdhuman.train",

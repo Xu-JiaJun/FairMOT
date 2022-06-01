@@ -1,5 +1,5 @@
 {
-    "root":"/home/zyf/dataset",
+    "root":"/root/autodl-tmp/data",
     "train":
     {
         "mot15":"./data/mot15.train"
