@@ -3,3 +3,5 @@
 /DCNv2
 /models
 /exp
+/log/*
+*.pyc

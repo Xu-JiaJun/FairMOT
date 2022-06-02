@@ -22,7 +22,7 @@ import datasets.dataset.jde as datasets
 from tracking_utils.utils import mkdir_if_missing
 from opts import opts
 
-from tracker.byte_tracker import BYTETracker
+from app_utils import write_log_to_txt
 
 
 def write_results(filename, results, data_type):
@@ -69,7 +69,8 @@ def write_results_score(filename, results, data_type):
     logger.info('save results to {}'.format(filename))
 
 
-def eval_seq(opt, dataloader, data_type, result_filename, save_dir=None, show_image=True, frame_rate=30, use_cuda=True):
+def eval_seq(opt, dataloader, data_type, result_filename, save_dir=None, show_image=True, frame_rate=30, use_cuda=True,
+             suid=''):
     if save_dir:
         mkdir_if_missing(save_dir)
     tracker = JDETracker(opt, frame_rate=frame_rate)
@@ -82,6 +83,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, save_dir=None, show_im
             #continue
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
+            write_log_to_txt(suid, 'Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
 
         # run tracking
         timer.tic()
@@ -171,7 +173,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     opt = opts().init()
 
     if not opt.val_mot16:
@@ -191,7 +193,7 @@ if __name__ == '__main__':
                       MOT16-10
                       MOT16-11
                       MOT16-13'''
-        data_root = os.path.join(opt.data_dir, 'MOT16/images/train')
+        data_root = os.path.join(opt.data_dir, 'MOT16/train')
     if opt.test_mot16:
         seqs_str = '''MOT16-01
                       MOT16-03
@@ -202,7 +204,7 @@ if __name__ == '__main__':
                       MOT16-14'''
         #seqs_str = '''MOT16-01 MOT16-07 MOT16-12 MOT16-14'''
         #seqs_str = '''MOT16-06 MOT16-08'''
-        data_root = os.path.join(opt.data_dir, 'MOT16/images/test')
+        data_root = os.path.join(opt.data_dir, 'MOT16/test')
     if opt.test_mot15:
         seqs_str = '''ADL-Rundle-1
                       ADL-Rundle-3
@@ -267,7 +269,7 @@ if __name__ == '__main__':
     main(opt,
          data_root=data_root,
          seqs=seqs,
-         exp_name='MOT16_test_finalcbam',
+         exp_name='MOT17_test_public_dla34',
          show_image=False,
-         save_images=False,
+         save_images=True,
          save_videos=False)
