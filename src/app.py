@@ -97,6 +97,7 @@ def track_frame():
     suid = ''.join(uid.split('-'))
 
     # 根据视频帧生成对应视频
+    write_log_to_txt(suid, '开始生成视频，读取{}中视频帧'.format(input_dir))
     video_path = images2video(input_dir, output_dir)
     write_log_to_txt(suid, '根据视频帧生成视频：{}'.format(video_path))
     print('video path:', video_path)
