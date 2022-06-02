@@ -5,7 +5,7 @@ from __future__ import print_function
 import logging
 import os
 import os.path as osp
-
+import _init_paths
 from opts import opts
 
 import lib.datasets.dataset.jde as datasets
