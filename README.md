@@ -1,12 +1,26 @@
 # FairMOT  
 
+> 毕业设计项目：基于无锚的多目标跟踪算法的设计与实现  
+> 基于Yifu Zhang等人的FairMOT进行改进  
+> 环境版本与原作者相同  
+> 增加Flask后端功能  
+> 前端项目地址：[mot-application](https://github.com/Xu-JiaJun/mot-application)
+
 ---
 
-毕业设计项目：基于无锚的多目标跟踪算法的设计与实现  
-基于Yifu Zhang等人的FairMOT进行改进  
-环境版本与原作者相同  
-增加Flask后端功能  
-前端项目地址：[mot-application](https://github.com/Xu-JiaJun/mot-application)
+主要修改部分：
+1. 骨干网络  
+修改位置：src > lib > models > networks > pose_dla_dcn.py(主要修改DLAseg类)  
+注意模块：src> lib > models > networks > attention.py
+2. 跟踪器  
+修改位置：tracker > multitracker.py(主要修改300-350行)
+3. 增加用于简易跟踪应用的程序（非算法部分）  
+增加文件：app.py app_utils.py commandline_args.txt等
+
+运行方法与原算法相同，可以使用README下方tracking部分命令执行  
+训练数据：
+先使用60批次crowdhuman，然后使用30批次MIX
+即首先运行crowdhuman_dla34.sh，再运行mix_ft_ch_dla34.sh
 
 ---
 
